@@ -3,3 +3,6 @@
 
 *.o
 inf-bonbon-server
+
+.kdev4/
+*.kdev4
