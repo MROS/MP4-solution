@@ -8,3 +8,6 @@ inf-bonbon-server: main.o
 
 main.o: main.cpp json.hpp
 	$(CC) $(FLAGS) -c main.cpp
+
+clean:
+	rm *.o inf-bonbon-server
