@@ -1,7 +1,9 @@
 *.swo
 *.swp
+*.kate-swp
 
 *.o
+*.gch
 inf-bonbon-server
 
 .kdev4/

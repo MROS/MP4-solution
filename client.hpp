@@ -4,9 +4,14 @@
 #include <queue>
 #include <sstream>
 #include <string>
-using namespace std;
 
-struct User {
+enum ClientStatus {
+  IDLE,
+  MATCHING,
+  TALKING,
+};
+
+struct RawUser {
   char name[33];
   unsigned int age;
   char gender[7];
@@ -16,14 +21,21 @@ struct User {
 
 class Client {
 public:
-  stringstream buffer;
-  User user;
+  std::stringstream buffer;
+  RawUser user;
   int match_fd;
   int socket_fd;
-  queue<string> cmd_queue;
+  
+  int unique_id;
+  
+  std::queue<std::string> cmd_queue;
 
-  Client(int fd) : socket_fd(fd), match_fd(-1) {}
-  void recv_message(char *s);
+  Client(int fd, int id) : socket_fd(fd), unique_id((id)), match_fd(-1) {}
+  void socket_recv(char *s);
+  void send_message_ack(std::string request);
+  void quit_ack();
+  void try_match_ack();
+  void handle_match(Client *target);
 };
 
 #endif

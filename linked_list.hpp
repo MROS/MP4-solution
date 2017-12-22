@@ -2,6 +2,7 @@
 #define LINKED_LIST_HPP
 
 #include <stddef.h>
+#include <functional>
 
 template <class T>
 struct Node {
@@ -20,6 +21,7 @@ public:
   void push_back(T value);
   void push_back(Node<T> *node);
   void erase(Node<T> *node);
+  Node<T> *search(std::function<bool(T)>);
 };
 
 template <class T>
@@ -73,5 +75,18 @@ void LinkedList<T>::erase(Node<T> *node) {
   delete node;
   this->length -= 1;
 }
+
+template <class T>
+Node<T>* LinkedList<T>::search(std::function<bool(T)> f) {
+  Node<T> *iter = this->head;
+  while (iter != nullptr) {
+    if (f(iter->value)) {
+      return iter;
+    }
+    iter = iter->next;
+  }
+  return nullptr;
+}
+
 
 #endif
