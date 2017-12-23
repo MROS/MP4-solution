@@ -3,8 +3,8 @@
 
 #include <deque>
 #include <map>
-#include <functional>
 #include "mq.hpp"
+#include "user.hpp"
 #include "client.hpp"
 #include "linked_list.hpp"
 

@@ -60,46 +60,6 @@ int set_up_socket(uint16_t port) {
 }
 
 
-// 建立兩個消息隊列
-// 1. 主程序用以向工人程序發送工作
-// 2. 工人程序向主程序回報成果
-MQPair create_MQ_pair() {
-  
-  printf("開始嘗試建立消息隊列\n");
-  struct MQPair ret;
-  
-  string prefix = "/inf-bonbon-server-from-main";
-  int count = 0;
-  while (true) {
-    string name = prefix + to_string(count);
-    mqd_t mqd = mq_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600, NULL);
-    if (mqd != -1) {
-      ret.from_main_mqd = mqd;
-      printf("建立消息隊列。名稱： %s mqd： %d\n", name.c_str(), mqd);
-      break;
-    } else {
-      perror("建立消息隊列");
-    }
-    count += 1;
-  }
-  count = 0;
-  prefix = "/inf-bonbon-server-from-worker";
-  while (true) {
-    string name = prefix + to_string(count);
-    mqd_t mqd = mq_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600, NULL);
-    if (mqd != -1) {
-      ret.from_worker_mqd = mqd;
-      printf("建立消息隊列。名稱： %s mqd： %d\n", name.c_str(), mqd);
-      break;
-    } else {
-      perror("建立消息隊列");
-    }
-    count += 1;
-  }
-  
-  return ret;
-}
-
 int main(int argc, char *argv[]) {
 
   if (argc != 2) {
@@ -207,11 +167,14 @@ int main(int argc, char *argv[]) {
 	      clients.erase(id);
 	      ipc_type_map.erase(fd);
 	    } else if (recv_len > 0) {
+	      
 	      printf("接收訊號 長度=%d 訊息=%s\n", recv_len, buf);
 	      int id = fd_to_id[fd];
 	      Client *client = clients[id];
 	      client->socket_recv(buf);
+	      
 	      while (!client->cmd_queue.empty()) {
+		
 		string str = client->cmd_queue.front();
 		client->cmd_queue.pop();
 		json j;
@@ -220,16 +183,25 @@ int main(int argc, char *argv[]) {
 		} catch (std::invalid_argument e) {}
 		std::string comming_cmd;
 		comming_cmd = j["cmd"].get<string>();
+		
 		if (comming_cmd == string("try_match")) {
+		  
 		  printf("%s", j["introduction"].get<string>().c_str());
 		  client->try_match_ack();
+		  
 		} else if (comming_cmd == string("send_message")) {
+		  
 		  client->send_message_ack(comming_cmd);
+		  
 		} else if (comming_cmd == string("quit")) {
+		  
 		  client->quit_ack();
+		  
 		} else {
+		  
 		  cout << comming_cmd;
 		  printf("莫名其妙\n");
+		  
 		}
 	      }
 	      break;

@@ -9,25 +9,6 @@
 
 using namespace std;
 
-struct User {
-  char name[33];
-  unsigned int age;
-  char gender[7];
-  char introduction[1025];
-};
-
-// 傳給 worker 的格式爲： 
-
-struct AssignJob {
-  struct User trying_user, candidate_user;
-  int trying_id, candidate_id;
-};
-
-struct ReportJob {
-  bool result;
-  int trying_id;
-};
-
 void work(MQPair mq_pair) {
   
 }
@@ -36,19 +17,27 @@ MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
   this->clients = clients;
   this->mq_pair = mq_pair;
   this->working_job = 0;
+  mq_attr mqAttr;  
+  mq_getattr(mq_pair.from_main_mqd, &mqAttr); 
   
   for (int i = 0; i < WORKER_NUMBER; i++) {
     pid_t pid = fork();
     if (pid == 0) { continue; }
     else {
       while (true) {
-	char s[5];
-	int err = mq_receive(mq_pair.from_main_mqd, s, 4, NULL);
+	size_t len = mqAttr.mq_msgsize;
+	char *s = new char[len];
+	int err = mq_receive(mq_pair.from_main_mqd, s, len, NULL);
 	if (err == -1) {
 	  perror("mq_receive");
-	} else { printf("worker receive\n"); }
-	err = mq_send(mq_pair.from_worker_mqd, "ok", 2, 0);
+	} else {
+	  printf("worker receive\n");
+	  
+	}
+	
 	// TODO: 工作
+	
+	err = mq_send(mq_pair.from_worker_mqd, "ok", 2, 0);
 	if (err == -1) {
 	  perror("mq_send");
 	} else { printf("worker send\n"); }
