@@ -194,16 +194,17 @@ int main(int argc, char *argv[]) {
 		  
 		} else if (comming_cmd == string("send_message")) {
 		  
-		  client->send_message_ack(j);
+		  client->send_message(j);
 		  
 		} else if (comming_cmd == string("quit")) {
 		  
-		  client->quit_ack();
+		  client->quit();
+		  match_queue.handle_quit(id);
 		  
 		} else {
 		  
 		  cout << comming_cmd;
-		  printf("莫名其妙\n");
+		  printf("不合規格的指令\n");
 		  
 		}
 	      }

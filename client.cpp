@@ -45,6 +45,9 @@ void Client::socket_recv(char *s) {
 }
 
 void Client::try_match_ack(json &try_match_json) {
+  
+  this->status = MATCHING;
+  
   this->raw_user.age = try_match_json["age"].get<int>();
   strcpy(this->raw_user.name, try_match_json["name"].get<string>().c_str());
   strcpy(this->raw_user.gender, try_match_json["gender"].get<string>().c_str());
@@ -59,7 +62,10 @@ void Client::try_match_ack(json &try_match_json) {
   return;
 }
 
-void Client::quit_ack() {
+void Client::quit() {
+  
+  this->status = IDLE;
+  
   const char *msg = "{\"cmd\":\"quit\"}\n";
   int err = send(this->socket_fd, msg, strlen(msg), 0);
   if (err == -1) {
@@ -68,7 +74,7 @@ void Client::quit_ack() {
   return;
 }
 
-void Client::send_message_ack(json j) {
+void Client::send_message(json j) {
   // ack
   string request = j.dump() + "\n";
   int err = send(this->socket_fd, request.c_str(), strlen(request.c_str()), 0);
@@ -102,6 +108,9 @@ string createMatchedAPI(Client *target) {
 void Client::handle_match(Client *target) {
   this->match_fd = target->socket_fd;
   target->match_fd = this->socket_fd;
+  
+  this->status = TALKING;
+  target->status = TALKING;
   
   string api = createMatchedAPI(target) + "\n";
   int err = send(this->socket_fd, api.c_str(), api.size(), 0);

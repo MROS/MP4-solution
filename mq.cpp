@@ -35,7 +35,7 @@ MQPair create_MQ_pair() {
     }
     count += 1;
   }
-  
+
   count = 0;
   prefix = "/inf-bonbon-server-from-worker";
   attr.mq_msgsize = sizeof(ReportJob);

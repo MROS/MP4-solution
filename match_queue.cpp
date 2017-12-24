@@ -30,13 +30,13 @@ MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
 	if (err == -1) {
 	  perror("mq_receive");
 	}
-	
+
 	// TODO: 工作
 	printf("企圖匹配 %d %d", assign_job.trying_id, assign_job.candidate_id);
-	
 	ReportJob report;
 	report.result = true;
 	report.trying_id = assign_job.trying_id;
+	
 	err = mq_send(mq_pair.from_worker_mqd, (char*)&report, sizeof(ReportJob), 0);
 	if (err == -1) {
 	  perror("mq_send");
@@ -54,6 +54,19 @@ void MatchQueue::handle_child_crash() {
 }
 
 void MatchQueue::handle_quit(int id) {
+  Node<TryingUser> *trying_node = this->trying_queue.search([id](TryingUser user) { return user.id == id; });
+  
+  if (trying_node != nullptr) {
+    this->trying_queue.erase(trying_node);
+    return;
+  }
+  
+  Node<int> *candidate_node = this->candidate_queue.search([id](int candidate_id) { return candidate_id == id; });
+  
+  if (candidate_node != nullptr) {
+    this->candidate_queue.erase(candidate_node);
+  }
+  
 }
 
 void MatchQueue::handle_match(int id) {
