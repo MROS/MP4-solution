@@ -1,0 +1,10 @@
+API 完成進度
+
+- try_match
+- send_message
+- quit
+- matched
+- receive_message
+- other_side_quit
+
+策略，先完成沒有加速版的（以完全測試六個 API），再開始平行化

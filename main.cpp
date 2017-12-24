@@ -84,6 +84,8 @@ int main(int argc, char *argv[]) {
   int max_fd = socket_fd;
   
   MQPair mq_pair = create_MQ_pair();
+  FD_SET(mq_pair.from_worker_mqd, &active_fd_set);
+  max_fd = (max_fd > mq_pair.from_worker_mqd) ? max_fd : mq_pair.from_worker_mqd;
   
   // 各個 fd 分別爲哪一種 IPC
   std::map<int, IpcType> ipc_type_map;
@@ -95,6 +97,7 @@ int main(int argc, char *argv[]) {
   MatchQueue match_queue(mq_pair, &clients);
   
   ipc_type_map[socket_fd] = SOCKET_ACCEPT;
+  ipc_type_map[mq_pair.from_worker_mqd] = MSG_QUEUE;
   // 唯一描述一個客戶端的識別子
   // NOTE: 在生產環境中，不應使用如此簡單的遞增策略來建立唯一識別子
   int unique_id_count = 0;
@@ -186,12 +189,12 @@ int main(int argc, char *argv[]) {
 		
 		if (comming_cmd == string("try_match")) {
 		  
-		  printf("%s", j["introduction"].get<string>().c_str());
-		  client->try_match_ack();
+		  client->try_match_ack(j);
+		  match_queue.add(id);
 		  
 		} else if (comming_cmd == string("send_message")) {
 		  
-		  client->send_message_ack(comming_cmd);
+		  client->send_message_ack(j);
 		  
 		} else if (comming_cmd == string("quit")) {
 		  
@@ -204,11 +207,14 @@ int main(int argc, char *argv[]) {
 		  
 		}
 	      }
-	      break;
 	    }
+	    break;
 	  }
 	  case MSG_QUEUE: {
 	    // TODO: MESSAGE_QUEUE
+	    ReportJob report;
+	    mq_receive(mq_pair.from_worker_mqd, (char *)&report, sizeof(ReportJob), NULL);
+	    match_queue.handle_report(report);
 	    break;
 	  }
 	  }

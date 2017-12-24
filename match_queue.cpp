@@ -25,22 +25,22 @@ MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
     if (pid == 0) { continue; }
     else {
       while (true) {
-	size_t len = mqAttr.mq_msgsize;
-	char *s = new char[len];
-	int err = mq_receive(mq_pair.from_main_mqd, s, len, NULL);
+	AssignJob assign_job;
+	int err = mq_receive(mq_pair.from_main_mqd, (char*)&assign_job, sizeof(AssignJob), NULL);
 	if (err == -1) {
 	  perror("mq_receive");
-	} else {
-	  printf("worker receive\n");
-	  
 	}
 	
 	// TODO: 工作
+	printf("企圖匹配 %d %d", assign_job.trying_id, assign_job.candidate_id);
 	
-	err = mq_send(mq_pair.from_worker_mqd, "ok", 2, 0);
+	ReportJob report;
+	report.result = true;
+	report.trying_id = assign_job.trying_id;
+	err = mq_send(mq_pair.from_worker_mqd, (char*)&report, sizeof(ReportJob), 0);
 	if (err == -1) {
 	  perror("mq_send");
-	} else { printf("worker send\n"); }
+	}
       }
     }
   }
@@ -81,14 +81,71 @@ void MatchQueue::handle_match(int id) {
 }
 
 void MatchQueue::add(int id) {
-  TryingUser trying_user;
-  trying_user.id = id;
-  trying_user.matchingWith = nullptr;
-  this->trying_queue.push_back(trying_user);
-  this->arrange_job();
+  
+  // candidate_quque 沒人
+  if (this->candidate_queue.head == nullptr) {
+    this->candidate_queue.push_back(id);
+  }
+  else {
+    TryingUser trying_user;
+    trying_user.id = id;
+    trying_user.progress = WAITING;
+    trying_user.matchingWith = this->candidate_queue.head;
+    this->trying_queue.push_back(trying_user);
+    this->arrange_job();
+  }
+  
 }
 
 void MatchQueue::arrange_job() {
-  if (trying_queue.length == 0) { return; }
-
+  Node<TryingUser> *iter = this->trying_queue.head;
+  
+  // TODO: 改爲多人版
+  while (iter != nullptr) {
+    if (iter->value.progress == WAITING) {
+      iter->value.progress = PROCESSING;
+      
+      AssignJob assign_job;
+      assign_job.trying_id = iter->value.id;
+      assign_job.candidate_id = iter->value.matchingWith->value;
+      assign_job.trying_user = this->clients->operator[](assign_job.trying_id)->to_user();
+      assign_job.candidate_user = this->clients->operator[](assign_job.candidate_id)->to_user();
+      
+      mq_send(this->mq_pair.from_main_mqd, (char *)&assign_job, sizeof(assign_job), 0);
+      break;
+    }
+    iter = iter->next;
+  }
 }
+
+void MatchQueue::handle_report(ReportJob report) {
+  // TODO: 處理已經 quit 的狀況
+  if (report.result == true) {
+    this->handle_match(report.trying_id);
+    this->arrange_job();
+  } else if (report.result == false) {
+    
+    int id = report.trying_id;
+    Node<TryingUser> *node = this->trying_queue.search([id](TryingUser user) { return user.id == id; });
+    
+    if (node->value.matchingWith == this->candidate_queue.tail) {
+      this->candidate_queue.push_back(id);
+      this->trying_queue.erase(node);
+    } else {
+      node->value.progress = WAITING;
+    }
+    
+    this->arrange_job();
+  }
+}
+
+
+
+
+
+
+
+
+
+
+

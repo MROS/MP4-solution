@@ -4,6 +4,8 @@
 #include <queue>
 #include <sstream>
 #include <string>
+#include "user.hpp"
+#include "json.hpp"
 
 enum ClientStatus {
   IDLE,
@@ -22,7 +24,7 @@ struct RawUser {
 class Client {
 public:
   std::stringstream buffer;
-  RawUser user;
+  RawUser raw_user;
   int match_fd;
   int socket_fd;
   
@@ -31,10 +33,12 @@ public:
   std::queue<std::string> cmd_queue;
 
   Client(int fd, int id) : socket_fd(fd), unique_id((id)), match_fd(-1) {}
+  
+  struct User to_user();
   void socket_recv(char *s);
-  void send_message_ack(std::string request);
+  void send_message_ack(nlohmann::json j);
   void quit_ack();
-  void try_match_ack();
+  void try_match_ack(nlohmann::json &try_match_json);
   void handle_match(Client *target);
 };
 

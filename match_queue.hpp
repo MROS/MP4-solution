@@ -8,10 +8,14 @@
 #include "client.hpp"
 #include "linked_list.hpp"
 
+enum Progress {
+  WAITING, PROCESSING 
+};
 
 struct TryingUser {
   int id;
   Node<int> *matchingWith;
+  Progress progress;
 };
 
 class MatchQueue {
@@ -30,6 +34,7 @@ public:
   void handle_child_crash();
   void handle_quit(int id);
   void handle_match(int id);
+  void handle_report(ReportJob report);
   void add(int id);
   void arrange_job();
 };

@@ -12,6 +12,16 @@
 using namespace std;
 using json = nlohmann::json;
 
+User Client::to_user() {
+  User user;
+  user.age = this->raw_user.age;
+  strcpy(user.name, this->raw_user.name);
+  strcpy(user.gender, this->raw_user.gender);
+  strcpy(user.introduction, this->raw_user.introduction);
+  return user;
+}
+
+
 int count_char(char *s, char c) {
   int len = strlen(s);
   int count = 0;
@@ -34,7 +44,13 @@ void Client::socket_recv(char *s) {
   return;
 }
 
-void Client::try_match_ack() {
+void Client::try_match_ack(json &try_match_json) {
+  this->raw_user.age = try_match_json["age"].get<int>();
+  strcpy(this->raw_user.name, try_match_json["name"].get<string>().c_str());
+  strcpy(this->raw_user.gender, try_match_json["gender"].get<string>().c_str());
+  strcpy(this->raw_user.introduction, try_match_json["introduction"].get<string>().c_str());
+  strcpy(this->raw_user.filter_function, try_match_json["filter_function"].get<string>().c_str());
+  
   const char *msg = "{\"cmd\":\"try_match\"}\n";
   int err = send(this->socket_fd, msg, strlen(msg), 0);
   if (err == -1) {
@@ -52,11 +68,20 @@ void Client::quit_ack() {
   return;
 }
 
-void Client::send_message_ack(string request) {
-  request += "\n";
+void Client::send_message_ack(json j) {
+  // ack
+  string request = j.dump() + "\n";
   int err = send(this->socket_fd, request.c_str(), strlen(request.c_str()), 0);
   if (err == -1) {
-    perror("send send_message_ack");
+    perror("send send_message");
+  }
+  
+  // to otherside
+  j["cmd"] = "receive_message";
+  request = j.dump() + "\n";
+  err = send(this->match_fd, request.c_str(), strlen(request.c_str()), 0);
+  if (err == -1) {
+    perror("send receieve_message");
   }
   return;
 }
@@ -64,7 +89,12 @@ void Client::send_message_ack(string request) {
 string createMatchedAPI(Client *target) {
   json j;
   j["cmd"] = "matched";
-  j["name"] = target->user.name;
+  j["name"] = target->raw_user.name;
+  j["age"] = target->raw_user.age;
+  j["gender"] = target->raw_user.gender;
+  j["introduction"] = target->raw_user.introduction;
+  j["filter_function"] = target->raw_user.filter_function;
+  cout << "matched API: " << j.dump() << endl;
   // TODO: 待補其他資訊
   return j.dump();
 }
