@@ -5,6 +5,7 @@
 *.o
 *.gch
 inf-bonbon-server
+a.out
 
 .kdev4/
 *.kdev4

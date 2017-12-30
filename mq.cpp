@@ -9,17 +9,17 @@ using namespace std;
 // 1. 主程序用以向工人程序發送工作
 // 2. 工人程序向主程序回報成果
 MQPair create_MQ_pair() {
-  
+
   printf("開始嘗試建立消息隊列\n");
   struct MQPair ret;
-  
+
   struct mq_attr attr;
-  
+
   attr.mq_flags = 0;  
   attr.mq_maxmsg = 10;  
   attr.mq_msgsize = sizeof(AssignJob);
   attr.mq_curmsgs = 0; 
-  
+
   string prefix = "/inf-bonbon-server-from-main";
   int count = 0;
   while (true) {

@@ -34,7 +34,7 @@ int set_up_socket(uint16_t port) {
   struct sockaddr_in addr;
   
   if (socket_fd == -1) {
-    printf("創建 socket 失敗\n");
+    fprintf(stderr, "創建 socket 失敗\n");
     return -1;
   }
   
@@ -52,7 +52,7 @@ int set_up_socket(uint16_t port) {
   
   err = listen(socket_fd, 1000);
   if (err == -1) {
-    printf("listen error\n");
+    fprintf(stderr, "listen error\n");
     return -1;
   }
   
@@ -66,15 +66,20 @@ int main(int argc, char *argv[]) {
     printf("用法： ./inf-bonbon-server [port]\n");
     return 1;
   }
+  
+  // NOTE: 除錯用，可能導致減速
+  setbuf(stdout, NULL);
+  setbuf(stderr, NULL);
 
   int port = atoi(argv[1]);
   
   // 初始化 socket
   int socket_fd = set_up_socket(port);
   if (socket_fd == -1) {
-    printf("啓動 socket 失敗，伺服器關閉\n");
+    printf("socket fail\n");
     return 1;
   }
+  // printf("啓動 socket 成功，監聽 %d\n", port);
   printf("啓動 socket 成功，監聽 %d\n", port);
   
   // 開始 select
@@ -170,14 +175,14 @@ int main(int argc, char *argv[]) {
 	      clients.erase(id);
 	      ipc_type_map.erase(fd);
 	    } else if (recv_len > 0) {
-	      
+      
 	      printf("接收訊號 長度=%d 訊息=%s\n", recv_len, buf);
 	      int id = fd_to_id[fd];
 	      Client *client = clients[id];
 	      client->socket_recv(buf);
-	      
+      
 	      while (!client->cmd_queue.empty()) {
-		
+
 		string str = client->cmd_queue.front();
 		client->cmd_queue.pop();
 		json j;
@@ -186,26 +191,32 @@ int main(int argc, char *argv[]) {
 		} catch (std::invalid_argument e) {}
 		std::string comming_cmd;
 		comming_cmd = j["cmd"].get<string>();
-		
+
 		if (comming_cmd == string("try_match")) {
-		  
+  
 		  client->try_match_ack(j);
 		  match_queue.add(id);
-		  
+  
 		} else if (comming_cmd == string("send_message")) {
-		  
+  
 		  client->send_message(j);
-		  
+  
 		} else if (comming_cmd == string("quit")) {
-		  
+  
 		  client->quit();
+  
+		  int other_side_fd = client->match_fd;
+		  int other_side_id = fd_to_id[other_side_fd];
+		  Client *other_side_client = clients[other_side_id];
+		  other_side_client->other_side_quit();
+  
 		  match_queue.handle_quit(id);
-		  
+
 		} else {
-		  
+  
 		  cout << comming_cmd;
 		  printf("不合規格的指令\n");
-		  
+  
 		}
 	      }
 	    }

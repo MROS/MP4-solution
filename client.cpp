@@ -1,5 +1,6 @@
 #include "client.hpp"
 #include "json.hpp"
+#include "load_library_util.hpp"
 
 #include <string>
 #include <sstream>
@@ -47,12 +48,15 @@ void Client::socket_recv(char *s) {
 void Client::try_match_ack(json &try_match_json) {
   
   this->status = MATCHING;
+  this->try_match_counter += 1;
   
   this->raw_user.age = try_match_json["age"].get<int>();
   strcpy(this->raw_user.name, try_match_json["name"].get<string>().c_str());
   strcpy(this->raw_user.gender, try_match_json["gender"].get<string>().c_str());
   strcpy(this->raw_user.introduction, try_match_json["introduction"].get<string>().c_str());
   strcpy(this->raw_user.filter_function, try_match_json["filter_function"].get<string>().c_str());
+  
+  save_source(this->raw_user.filter_function, this->unique_id, this->try_match_counter);
   
   const char *msg = "{\"cmd\":\"try_match\"}\n";
   int err = send(this->socket_fd, msg, strlen(msg), 0);
@@ -71,8 +75,23 @@ void Client::quit() {
   if (err == -1) {
     perror("send quit_ack");
   }
+  
   return;
 }
+
+void Client::other_side_quit() {
+  this->status = IDLE;
+  
+  const char *msg = "{\"cmd\":\"other_side_quit\"}\n";
+  int err = send(this->socket_fd, msg, strlen(msg), 0);
+  if (err == -1) {
+    perror("send quit_ack");
+  }
+  
+  return;
+
+}
+
 
 void Client::send_message(json j) {
   // ack

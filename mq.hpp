@@ -4,11 +4,15 @@
 #include <mqueue.h>
 #include "user.hpp"
 
-// 傳給 worker 的格式爲： 
+struct Info {
+  int id;
+  struct User user;
+  unsigned int counter;
+};
 
+// 傳給 worker 的格式爲：
 struct AssignJob {
-  struct User trying_user, candidate_user;
-  int trying_id, candidate_id;
+  Info trying_info, candidate_info;
 };
 
 struct ReportJob {

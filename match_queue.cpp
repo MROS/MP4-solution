@@ -4,13 +4,41 @@
 #include "config.hpp"
 #include "linked_list.hpp"
 
+#include <dlfcn.h>
 #include <deque>
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <string>
 
 using namespace std;
 
-void work(MQPair mq_pair) {
+
+ReportJob do_job(AssignJob *assign_job) {
+  ReportJob report;
+  report.trying_id = assign_job->trying_info.id;
   
+  void *handle = get_library_handle(&(assign_job->trying_info));
+  int result = run_filter(handle, assign_job->candidate_info.user);
+  dlclose(handle);
+  if (result == 0) {
+    printf("in do_job, trying filter_function false\n");
+    report.result = false;
+    return report;
+  }
+
+  handle = get_library_handle(&(assign_job->candidate_info));
+  result = run_filter(handle, assign_job->trying_info.user);
+  dlclose(handle);
+  if (result == 0) {
+    printf("in do_job, candidate filter_function false\n");
+    report.result = false;
+    return report;
+  }
+
+  report.result = true;
+  return report;
 }
 
 MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
@@ -30,12 +58,9 @@ MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
 	if (err == -1) {
 	  perror("mq_receive");
 	}
-
-	// TODO: 工作
-	printf("企圖匹配 %d %d", assign_job.trying_id, assign_job.candidate_id);
-	ReportJob report;
-	report.result = true;
-	report.trying_id = assign_job.trying_id;
+	
+	printf("試圖匹配 %d %d\n", assign_job.trying_info.id, assign_job.candidate_info.id);
+	ReportJob report = do_job(&assign_job);
 	
 	err = mq_send(mq_pair.from_worker_mqd, (char*)&report, sizeof(ReportJob), 0);
 	if (err == -1) {
@@ -115,14 +140,22 @@ void MatchQueue::arrange_job() {
   
   // TODO: 改爲多人版
   while (iter != nullptr) {
-    if (iter->value.progress == WAITING) {
+    bool ok = iter->value.progress == WAITING;
+    if (iter->prev != nullptr) {
+      ok = ok && (iter->prev->value.matchingWith != iter->value.matchingWith);
+    }
+    if (ok) {
       iter->value.progress = PROCESSING;
       
+      int trying_id = iter->value.id;
+      int candidate_id =  iter->value.matchingWith->value;
       AssignJob assign_job;
-      assign_job.trying_id = iter->value.id;
-      assign_job.candidate_id = iter->value.matchingWith->value;
-      assign_job.trying_user = this->clients->operator[](assign_job.trying_id)->to_user();
-      assign_job.candidate_user = this->clients->operator[](assign_job.candidate_id)->to_user();
+      assign_job.trying_info.id = trying_id;
+      assign_job.candidate_info.id = candidate_id;
+      assign_job.trying_info.user = this->clients->operator[](trying_id)->to_user();
+      assign_job.candidate_info.user = this->clients->operator[](candidate_id)->to_user();
+      assign_job.trying_info.counter = this->clients->operator[](trying_id)->try_match_counter;
+      assign_job.candidate_info.counter = this->clients->operator[](candidate_id)->try_match_counter;
       
       mq_send(this->mq_pair.from_main_mqd, (char *)&assign_job, sizeof(assign_job), 0);
       break;
@@ -138,6 +171,8 @@ void MatchQueue::handle_report(ReportJob report) {
     this->arrange_job();
   } else if (report.result == false) {
     
+    printf("report 爲 false\n");
+    
     int id = report.trying_id;
     Node<TryingUser> *node = this->trying_queue.search([id](TryingUser user) { return user.id == id; });
     
@@ -151,14 +186,6 @@ void MatchQueue::handle_report(ReportJob report) {
     this->arrange_job();
   }
 }
-
-
-
-
-
-
-
-
 
 
 
