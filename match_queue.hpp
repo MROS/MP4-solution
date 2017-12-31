@@ -1,8 +1,8 @@
 #ifndef MATCH_QUEUE_HPP
 #define MATCH_QUEUE
 
-#include <deque>
 #include <map>
+#include <set>
 #include "mq.hpp"
 #include "user.hpp"
 #include "client.hpp"
@@ -42,7 +42,9 @@ public:
   void add(int id);
   void arrange_job();
 private:
-  void detach(Node<TryingUser> *trying_node);
+  std::set<int> quit_set;
+  void detach_with_matcher(Node<TryingUser> *trying_node);
+  void detach(int id);
 };
 
 #endif

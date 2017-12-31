@@ -203,14 +203,15 @@ int main(int argc, char *argv[]) {
   
 		} else if (comming_cmd == string("quit")) {
   
-		  client->quit();
-  
-		  int other_side_fd = client->match_fd;
-		  int other_side_id = fd_to_id[other_side_fd];
-		  Client *other_side_client = clients[other_side_id];
-		  other_side_client->other_side_quit();
-  
-		  match_queue.handle_quit(id);
+		  if (client->status == TALKING) {
+		    int other_side_id = fd_to_id[client->match_fd];
+		    Client *other_side_client = clients[other_side_id];
+		    client->quit();
+		    other_side_client->other_side_quit();
+		  } else if (client->status == MATCHING) {
+		    match_queue.handle_quit(id);
+		    client->quit();
+		  }
 
 		} else {
   

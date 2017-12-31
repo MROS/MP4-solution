@@ -17,7 +17,7 @@ struct AssignJob {
 
 struct ReportJob {
   bool result;
-  int trying_id;
+  int trying_id, candidate_id;
 };
 
 struct MQPair {
