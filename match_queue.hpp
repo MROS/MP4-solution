@@ -41,6 +41,8 @@ public:
   void handle_report(ReportJob report);
   void add(int id);
   void arrange_job();
+private:
+  void detach(Node<TryingUser> *trying_node);
 };
 
 #endif

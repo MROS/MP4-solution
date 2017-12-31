@@ -78,42 +78,60 @@ void MatchQueue::handle_child_crash() {
   }
 }
 
+void MatchQueue::detach(Node<TryingUser>* trying_node) {
+  
+  Node<int>* candidate_node = trying_node->value.matchingWith;
+  
+  if (trying_node == nullptr || candidate_node == nullptr) {
+    printf("試圖在隊伍中丟掉爲 nullptr 的節點\n");
+    exit(1);
+  }
+  
+  bool is_tail = (this->candidate_queue.length == 1);
+  
+  Node<TryingUser> *iter = trying_node->next;
+  if (is_tail) {
+    if (iter != nullptr) {
+      this->candidate_queue.push_back(iter->value.id);
+      this->trying_queue.erase(iter);
+    }
+  }
+
+  Node<int> *next_candidate = candidate_node->next;
+  iter = trying_node->next;          // 原本的 next 可能在上面被 erase 掉了
+  while (iter != nullptr && iter->value.matchingWith == candidate_node) {
+    iter->value.matchingWith = next_candidate;
+    iter = iter->next;
+  }
+  
+  this->trying_queue.erase(trying_node);
+  this->candidate_queue.erase(candidate_node);
+
+}
+
 void MatchQueue::handle_quit(int id) {
   Node<TryingUser> *trying_node = this->trying_queue.search([id](TryingUser user) { return user.id == id; });
-  
-  if (trying_node != nullptr) {
-    this->trying_queue.erase(trying_node);
-    return;
-  }
-  
-  Node<int> *candidate_node = this->candidate_queue.search([id](int candidate_id) { return candidate_id == id; });
-  
-  if (candidate_node != nullptr) {
-    this->candidate_queue.erase(candidate_node);
-  }
-  
+  this->detach(trying_node);
 }
 
 void MatchQueue::handle_match(int id) {
  
-  Node<TryingUser> *node = this->trying_queue.search([id](TryingUser user) { return user.id == id; });
+  Node<TryingUser> *trying_node = this->trying_queue.search([id](TryingUser user) { return user.id == id; });
  
-
-  if (node != nullptr) {
+  if (trying_node != nullptr) {
  
-    TryingUser trying_user = node->value;
-
-    this->trying_queue.erase(node);
-    this->candidate_queue.erase(trying_user.matchingWith);
- 
+    TryingUser trying_user = trying_node->value;
     Client *client = (this->clients->operator[](trying_user.id));
 
     // handle_match 會傳送 matched 到雙方
     int candidate_id = trying_user.matchingWith->value;
     client->handle_match(this->clients->operator[](candidate_id));
     
-  } else if (node == nullptr) {
-  // TODO: 處理 match 時，已經 quit 的情形
+    this->detach(trying_node);
+    
+  } else if (trying_node == nullptr) {
+    // TODO: 處理 match 時，已經 quit 的情形
+    // 測試時，保證不會發生。但現實世界會發生
     printf("處理 match 時，已經 quit\n");
   }
 }
@@ -132,7 +150,6 @@ void MatchQueue::add(int id) {
     this->trying_queue.push_back(trying_user);
     this->arrange_job();
   }
-  
 }
 
 void MatchQueue::arrange_job() {
@@ -140,7 +157,7 @@ void MatchQueue::arrange_job() {
   
   // TODO: 改爲多人版
   while (iter != nullptr) {
-    bool ok = iter->value.progress == WAITING;
+    bool ok = (iter->value.progress == WAITING);
     if (iter->prev != nullptr) {
       ok = ok && (iter->prev->value.matchingWith != iter->value.matchingWith);
     }
@@ -180,6 +197,7 @@ void MatchQueue::handle_report(ReportJob report) {
       this->candidate_queue.push_back(id);
       this->trying_queue.erase(node);
     } else {
+      node->value.matchingWith = node->value.matchingWith->next;
       node->value.progress = WAITING;
     }
     
