@@ -6,6 +6,6 @@
 
 void *get_library_handle(Info *info);
 int run_filter(void* handle, User user);
-void save_source(char *filter_function, int id, unsigned int counter);
+void save_source_and_compile(char *filter_function, int id, unsigned int counter);
   
 #endif

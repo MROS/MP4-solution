@@ -166,14 +166,29 @@ int main(int argc, char *argv[]) {
 	      perror("recv()");
 	      return -1;
 	    } else if (recv_len == 0) {
+	      int id = fd_to_id[fd];
+	      Client *client = clients[id];
+	      
+	      // 與 quit 狀況類似，若修改此處，另一處也需要修改
+	      if (client->status == TALKING) {
+		int other_side_id = fd_to_id[client->match_fd];
+		Client *other_side_client = clients[other_side_id];
+		client->quit();
+		other_side_client->other_side_quit();
+	      } else if (client->status == MATCHING) {
+		match_queue.handle_quit(id);
+		client->quit();
+	      }
+	      
 	      printf("Client disconnect\n");
 	      close(fd);
 	      FD_CLR(fd, &active_fd_set);
-	      int id = fd_to_id[fd];
+	      
 	      fd_to_id.erase(fd);
-	      delete clients[id];
+	      delete client;
 	      clients.erase(id);
 	      ipc_type_map.erase(fd);
+	      
 	    } else if (recv_len > 0) {
       
 	      printf("接收訊號 長度=%d 訊息=%s\n", recv_len, buf);
@@ -203,6 +218,7 @@ int main(int argc, char *argv[]) {
   
 		} else if (comming_cmd == string("quit")) {
   
+		  // 與斷線狀況類似，若修改此處，另一處也需要修改
 		  if (client->status == TALKING) {
 		    int other_side_id = fd_to_id[client->match_fd];
 		    Client *other_side_client = clients[other_side_id];

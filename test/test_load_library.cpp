@@ -14,7 +14,7 @@ int main() {
   info.counter = 0;
   char filter_function_str[] = "int filter_function(struct User user) { return 1111; }";
   
-  save_source(filter_function_str, info.id, info.counter);
+  save_source_and_compile(filter_function_str, info.id, info.counter);
   
   void *handle = get_library_handle(&info);
   

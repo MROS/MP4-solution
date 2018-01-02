@@ -56,7 +56,7 @@ void Client::try_match_ack(json &try_match_json) {
   strcpy(this->raw_user.introduction, try_match_json["introduction"].get<string>().c_str());
   strcpy(this->raw_user.filter_function, try_match_json["filter_function"].get<string>().c_str());
   
-  save_source(this->raw_user.filter_function, this->unique_id, this->try_match_counter);
+  save_source_and_compile(this->raw_user.filter_function, this->unique_id, this->try_match_counter);
   
   const char *msg = "{\"cmd\":\"try_match\"}\n";
   int err = send(this->socket_fd, msg, strlen(msg), 0);

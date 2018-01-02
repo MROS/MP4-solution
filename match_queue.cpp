@@ -57,7 +57,7 @@ MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
 	if (err == -1) {
 	  perror("mq_receive");
 	}
-	
+
 	printf("試圖匹配 %d %d\n", assign_job.trying_info.id, assign_job.candidate_info.id);
 	ReportJob report = do_job(&assign_job);
 	
@@ -101,6 +101,7 @@ void MatchQueue::detach(int id) {
     Node<TryingUser> *iter = this->trying_queue.search([candidate_node](TryingUser user) { return user.matchingWith == candidate_node; });
     
     if (is_tail) {
+      printf("in tail\n");
       if (iter != nullptr && iter->value.matchingWith == candidate_node) {
 	this->candidate_queue.push_back(iter->value.id);
 	auto next_iter = iter->next;
@@ -202,7 +203,8 @@ void MatchQueue::arrange_job() {
   Node<TryingUser> *iter = this->trying_queue.head;
   
   // TODO: 改爲多人版
-  while (iter != nullptr) {
+  while (iter != nullptr && this->working_job < WORKER_NUMBER) {
+  // while (iter != nullptr) {
     bool ok = (iter->value.progress == WAITING);
     if (iter->prev != nullptr) {
       ok = ok && (iter->prev->value.matchingWith != iter->value.matchingWith);
@@ -221,13 +223,15 @@ void MatchQueue::arrange_job() {
       assign_job.candidate_info.counter = this->clients->operator[](candidate_id)->try_match_counter;
       
       mq_send(this->mq_pair.from_main_mqd, (char *)&assign_job, sizeof(assign_job), 0);
-      break;
+      this->working_job += 1;
     }
     iter = iter->next;
   }
 }
 
 void MatchQueue::handle_report(ReportJob report) {
+  this->working_job -= 1;
+  
   if (report.result == true) {
     // TODO: 處理已經 quit 的狀況
     // 在測試中並不會發生
@@ -244,11 +248,13 @@ void MatchQueue::handle_report(ReportJob report) {
     auto it = this->quit_set.find(trying_id);
     if (it != this->quit_set.end()) {
       this->quit_set.erase(it);
+      this->arrange_job();
       return;
     }
     it = this->quit_set.find(candidate_id);
     if (it != this->quit_set.end()) {
       this->quit_set.erase(it);
+      this->arrange_job();
       return;
     }
     
@@ -265,6 +271,4 @@ void MatchQueue::handle_report(ReportJob report) {
     this->arrange_job();
   }
 }
-
-
 
