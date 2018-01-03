@@ -162,10 +162,10 @@ int main(int argc, char *argv[]) {
 	    
 	    int recv_len = recv(fd, buf, sizeof(buf) - 1, 0);
 	    
-	    if (recv_len == -1) {
-	      perror("recv()");
-	      return -1;
-	    } else if (recv_len == 0) {
+	    if (recv_len == -1 || recv_len == 0) {
+	      if (recv_len == -1) {
+	        perror("recv()");
+	      }
 	      int id = fd_to_id[fd];
 	      Client *client = clients[id];
 	      
@@ -173,15 +173,17 @@ int main(int argc, char *argv[]) {
 	      if (client->status == TALKING) {
 		int other_side_id = fd_to_id[client->match_fd];
 		Client *other_side_client = clients[other_side_id];
-		client->quit();
+		// client->quit();
 		other_side_client->other_side_quit();
 	      } else if (client->status == MATCHING) {
 		match_queue.handle_quit(id);
-		client->quit();
+		// client->quit();
 	      }
 	      
 	      printf("Client disconnect\n");
-	      close(fd);
+	      if (close(fd) == -1) {
+		perror("close()");
+	      }
 	      FD_CLR(fd, &active_fd_set);
 	      
 	      fd_to_id.erase(fd);
