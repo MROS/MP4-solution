@@ -22,6 +22,7 @@ struct ReportPid {
 };
 
 struct ReportJob {
+  pid_t pid;
   bool result;
   int trying_id, candidate_id;
 };

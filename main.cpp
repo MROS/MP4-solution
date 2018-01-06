@@ -279,10 +279,12 @@ int main(int argc, char *argv[]) {
 	    } else if (fd == mq_set.from_worker_pid_mqd) {
 	      ReportPid report_pid;
 	      mq_receive(mq_set.from_worker_pid_mqd, (char *)&report_pid, sizeof(ReportPid), NULL);
+	      match_queue.handle_report_pid(report_pid);
 	    }
 	    break;
 	  }
 	  case SIGNAL: {
+	    // 無法確定是在收到 report_pid 之後才收到 SIGCHLD
 	    struct signalfd_siginfo s;
 	    int len = read(fd, &s, sizeof(struct signalfd_siginfo));
 	    if (len != sizeof(struct signalfd_siginfo)) {

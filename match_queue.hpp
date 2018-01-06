@@ -31,7 +31,7 @@ public:
   
   unsigned int working_job;
   
-  MQSet mq_pair;
+  MQSet mq_set;
   
   MatchQueue(MQSet mq_pair, std::map<int, Client*>* clients);
   
@@ -42,8 +42,11 @@ public:
   void handle_report_pid(ReportPid report_pid);
   void add(int id);
   void arrange_job();
+  void new_child();
 private:
   std::map<pid_t, ReportPid> job_record;
+  std::set<pid_t> killed_child;
+  
   std::set<int> quit_set;
   void detach_with_matcher(Node<TryingUser> *trying_node);
   void detach(int id);

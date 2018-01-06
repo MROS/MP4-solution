@@ -40,46 +40,70 @@ ReportJob do_job(AssignJob *assign_job) {
   return report;
 }
 
-MatchQueue::MatchQueue(MQSet mq_pair, map<int, Client*>* clients) {
-  this->clients = clients;
-  this->mq_pair = mq_pair;
-  this->working_job = 0;
-  mq_attr mqAttr;  
-  mq_getattr(mq_pair.from_main_mqd, &mqAttr); 
-  
-  for (int i = 0; i < WORKER_NUMBER; i++) {
-    pid_t pid = fork();
-    if (pid == 0) {
-      pid_t my_pid = getpid();
-      pid_t ppid = getppid();
-      printf("%d fork by %d\n", my_pid, ppid);
-      while (true) {
-	AssignJob assign_job;
-	int err = mq_receive(mq_pair.from_main_mqd, (char*)&assign_job, sizeof(AssignJob), NULL);
-	if (err == -1) {
-	  perror("mq_receive");
-	}
-
-	printf("試圖匹配 %d %d\n", assign_job.trying_info.id, assign_job.candidate_info.id);
-	ReportJob report = do_job(&assign_job);
-	
-	err = mq_send(mq_pair.from_worker_job_mqd, (char*)&report, sizeof(ReportJob), 0);
-	if (err == -1) {
-	  perror("mq_send");
-	}
-      }
-    } else {
+void worker(MQSet mq_set) {
+  pid_t my_pid = getpid();
+  pid_t ppid = getppid();
+  printf("%d fork by %d\n", my_pid, ppid);
+  while (true) {
+    AssignJob assign_job;
+    int err = mq_receive(mq_set.from_main_mqd, (char*)&assign_job, sizeof(AssignJob), NULL);
+    if (err == -1) {
+      perror("mq_receive");
+    }
+    ReportPid report_pid;
+    report_pid.pid = my_pid;
+    report_pid.trying_id = assign_job.trying_info.id;
+    report_pid.candidate_id = assign_job.candidate_info.id;
+    mq_send(mq_set.from_worker_pid_mqd, (char*)&report_pid, sizeof(ReportPid), 0);
+    
+    printf("試圖匹配 %d %d\n", assign_job.trying_info.id, assign_job.candidate_info.id);
+    ReportJob report = do_job(&assign_job);
+    report.pid = my_pid;
+    
+    err = mq_send(mq_set.from_worker_job_mqd, (char*)&report, sizeof(ReportJob), 0);
+    if (err == -1) {
+      perror("mq_send");
     }
   }
 }
 
-void MatchQueue::handle_child_crash(pid_t child_pid) {
-  /*
-  pid_t pid = fork();
-  if (pid != 0) {
-    
+MatchQueue::MatchQueue(MQSet mq_set, map<int, Client*>* clients) {
+  this->clients = clients;
+  this->mq_set = mq_set;
+  this->working_job = 0;
+  
+  for (int i = 0; i < WORKER_NUMBER; i++) {
+    this->new_child();
   }
-  */
+}
+
+void MatchQueue::new_child() {
+  pid_t pid = fork();
+  if (pid == -1) {
+    perror("fork()");
+  }
+  else if (pid == 0) {
+    // 子進程
+    worker(this->mq_set);
+  }
+}
+
+
+void MatchQueue::handle_child_crash(pid_t child_pid) {
+  this->new_child();
+  
+  auto it = this->job_record.find(child_pid);
+  if (it == this->job_record.end()) {
+    // 還未收到 ReportPid
+    this->killed_child.insert(child_pid);
+  } else {
+    ReportJob report_job;
+    report_job.result = false;
+    report_job.pid = child_pid;
+    report_job.trying_id = this->job_record[child_pid].trying_id;
+    report_job.candidate_id = this->job_record[child_pid].candidate_id;
+    this->handle_report(report_job);
+  }
 }
 
 void MatchQueue::detach(int id) {
@@ -226,7 +250,7 @@ void MatchQueue::arrange_job() {
       assign_job.trying_info.counter = this->clients->operator[](trying_id)->try_match_counter;
       assign_job.candidate_info.counter = this->clients->operator[](candidate_id)->try_match_counter;
       
-      mq_send(this->mq_pair.from_main_mqd, (char *)&assign_job, sizeof(assign_job), 0);
+      mq_send(this->mq_set.from_main_mqd, (char *)&assign_job, sizeof(assign_job), 0);
       this->working_job += 1;
     }
     iter = iter->next;
@@ -235,6 +259,7 @@ void MatchQueue::arrange_job() {
 
 void MatchQueue::handle_report(ReportJob report) {
   this->working_job -= 1;
+  this->job_record.erase(report.pid);
   
   if (report.result == true) {
     // TODO: 處理已經 quit 的狀況
@@ -277,6 +302,22 @@ void MatchQueue::handle_report(ReportJob report) {
 }
 
 void MatchQueue::handle_report_pid(ReportPid report_pid) {
-  this->job_record[report_pid.pid] = report_pid;
+  // XXX: 假使子進程 pid 不可能這麼快重複
+  printf("pid %d handle %d %d match\n", report_pid.pid, report_pid.trying_id, report_pid.candidate_id);
+  auto it = this->killed_child.find(report_pid.pid);
+  
+  if (it != this->killed_child.end()) {
+    // 該子進程已死
+    this->killed_child.erase(it);
+    ReportJob report_job;
+    report_job.pid = report_pid.pid;
+    report_job.result = false;
+    report_job.trying_id = report_pid.trying_id;
+    report_job.candidate_id = report_pid.candidate_id;
+    this->handle_report(report_job);
+  } else {
+    // 該子進程還活著
+    this->job_record[report_pid.pid] = report_pid;
+  }
 }
 
