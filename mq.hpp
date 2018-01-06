@@ -2,6 +2,7 @@
 #define MQ_HPP
 
 #include <mqueue.h>
+#include <unistd.h>
 #include "user.hpp"
 
 struct Info {
@@ -15,16 +16,21 @@ struct AssignJob {
   Info trying_info, candidate_info;
 };
 
+struct ReportPid {
+  pid_t pid;
+  int trying_id, candidate_id;
+};
+
 struct ReportJob {
   bool result;
   int trying_id, candidate_id;
 };
 
-struct MQPair {
-   mqd_t from_main_mqd, from_worker_mqd;
+struct MQSet {
+   mqd_t from_main_mqd, from_worker_job_mqd, from_worker_pid_mqd;
 };
 
-MQPair create_MQ_pair();
+MQSet create_MQ_pair();
 
 
 #endif

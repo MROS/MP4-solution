@@ -40,7 +40,7 @@ ReportJob do_job(AssignJob *assign_job) {
   return report;
 }
 
-MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
+MatchQueue::MatchQueue(MQSet mq_pair, map<int, Client*>* clients) {
   this->clients = clients;
   this->mq_pair = mq_pair;
   this->working_job = 0;
@@ -49,8 +49,10 @@ MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
   
   for (int i = 0; i < WORKER_NUMBER; i++) {
     pid_t pid = fork();
-    if (pid == 0) { printf("fork\n"); continue; }
-    else {
+    if (pid == 0) {
+      pid_t my_pid = getpid();
+      pid_t ppid = getppid();
+      printf("%d fork by %d\n", my_pid, ppid);
       while (true) {
 	AssignJob assign_job;
 	int err = mq_receive(mq_pair.from_main_mqd, (char*)&assign_job, sizeof(AssignJob), NULL);
@@ -61,20 +63,23 @@ MatchQueue::MatchQueue(MQPair mq_pair, map<int, Client*>* clients) {
 	printf("試圖匹配 %d %d\n", assign_job.trying_info.id, assign_job.candidate_info.id);
 	ReportJob report = do_job(&assign_job);
 	
-	err = mq_send(mq_pair.from_worker_mqd, (char*)&report, sizeof(ReportJob), 0);
+	err = mq_send(mq_pair.from_worker_job_mqd, (char*)&report, sizeof(ReportJob), 0);
 	if (err == -1) {
 	  perror("mq_send");
 	}
       }
+    } else {
     }
   }
 }
 
-void MatchQueue::handle_child_crash() {
+void MatchQueue::handle_child_crash(pid_t child_pid) {
+  /*
   pid_t pid = fork();
   if (pid != 0) {
     
   }
+  */
 }
 
 void MatchQueue::detach(int id) {
@@ -202,7 +207,6 @@ void MatchQueue::add(int id) {
 void MatchQueue::arrange_job() {
   Node<TryingUser> *iter = this->trying_queue.head;
   
-  // TODO: 改爲多人版
   while (iter != nullptr && this->working_job < WORKER_NUMBER) {
   // while (iter != nullptr) {
     bool ok = (iter->value.progress == WAITING);
@@ -270,5 +274,9 @@ void MatchQueue::handle_report(ReportJob report) {
     
     this->arrange_job();
   }
+}
+
+void MatchQueue::handle_report_pid(ReportPid report_pid) {
+  this->job_record[report_pid.pid] = report_pid;
 }
 

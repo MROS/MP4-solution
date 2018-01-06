@@ -17,6 +17,9 @@
 #include <mqueue.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <sys/signalfd.h>
 
 using json = nlohmann::json;
 using namespace std;
@@ -27,6 +30,7 @@ enum IpcType {
   SOCKET_ACCEPT,
   SOCKET_RECV,
   MSG_QUEUE,
+  SIGNAL
 };
 
 int set_up_socket(uint16_t port) {
@@ -59,6 +63,23 @@ int set_up_socket(uint16_t port) {
   return socket_fd;
 }
 
+int set_up_signal_fd() {
+  sigset_t blockSet;
+  sigemptyset(&blockSet);
+  sigaddset(&blockSet, SIGCHLD);
+  
+  if (sigprocmask(SIG_SETMASK, &blockSet, NULL) == -1) {
+    perror("sigprocmask()");
+    exit(1);
+  }
+  
+  int fd = signalfd(-1, &blockSet, 0);
+  if (fd == -1) {
+    perror("signalfd()");
+    exit(1);
+  }
+  return fd;
+}
 
 int main(int argc, char *argv[]) {
 
@@ -73,24 +94,33 @@ int main(int argc, char *argv[]) {
 
   int port = atoi(argv[1]);
   
+  pid_t pid = getpid();
+  
+  printf("main process pid: %d\n", pid);
+  
   // 初始化 socket
   int socket_fd = set_up_socket(port);
   if (socket_fd == -1) {
     printf("socket fail\n");
     return 1;
   }
-  // printf("啓動 socket 成功，監聽 %d\n", port);
   printf("啓動 socket 成功，監聽 %d\n", port);
+  
+  // 初始話 signal_fd
+  int signal_fd = set_up_signal_fd();
   
   // 開始 select
   fd_set active_fd_set;
   FD_ZERO(&active_fd_set);
   FD_SET(socket_fd, &active_fd_set);
-  int max_fd = socket_fd;
+  FD_SET(signal_fd, &active_fd_set);
+  int max_fd = socket_fd > signal_fd ? socket_fd : signal_fd;
   
-  MQPair mq_pair = create_MQ_pair();
-  FD_SET(mq_pair.from_worker_mqd, &active_fd_set);
-  max_fd = (max_fd > mq_pair.from_worker_mqd) ? max_fd : mq_pair.from_worker_mqd;
+  MQSet mq_set = create_MQ_pair();
+  FD_SET(mq_set.from_worker_job_mqd, &active_fd_set);
+  max_fd = (max_fd > mq_set.from_worker_job_mqd) ? max_fd : mq_set.from_worker_job_mqd;
+  FD_SET(mq_set.from_worker_pid_mqd, &active_fd_set);
+  max_fd = (max_fd > mq_set.from_worker_job_mqd) ? max_fd : mq_set.from_worker_pid_mqd;
   
   // 各個 fd 分別爲哪一種 IPC
   std::map<int, IpcType> ipc_type_map;
@@ -99,10 +129,12 @@ int main(int argc, char *argv[]) {
   // fd 到 id 的映射
   std::map<int, int> fd_to_id;
   
-  MatchQueue match_queue(mq_pair, &clients);
+  MatchQueue match_queue(mq_set, &clients);
   
   ipc_type_map[socket_fd] = SOCKET_ACCEPT;
-  ipc_type_map[mq_pair.from_worker_mqd] = MSG_QUEUE;
+  ipc_type_map[signal_fd] = SIGNAL;
+  ipc_type_map[mq_set.from_worker_job_mqd] = MSG_QUEUE;
+  ipc_type_map[mq_set.from_worker_pid_mqd] = MSG_QUEUE;
   // 唯一描述一個客戶端的識別子
   // NOTE: 在生產環境中，不應使用如此簡單的遞增策略來建立唯一識別子
   int unique_id_count = 0;
@@ -173,11 +205,9 @@ int main(int argc, char *argv[]) {
 	      if (client->status == TALKING) {
 		int other_side_id = fd_to_id[client->match_fd];
 		Client *other_side_client = clients[other_side_id];
-		// client->quit();
 		other_side_client->other_side_quit();
 	      } else if (client->status == MATCHING) {
 		match_queue.handle_quit(id);
-		// client->quit();
 	      }
 	      
 	      printf("Client disconnect\n");
@@ -242,14 +272,31 @@ int main(int argc, char *argv[]) {
 	    break;
 	  }
 	  case MSG_QUEUE: {
-	    // TODO: MESSAGE_QUEUE
-	    ReportJob report;
-	    mq_receive(mq_pair.from_worker_mqd, (char *)&report, sizeof(ReportJob), NULL);
-	    match_queue.handle_report(report);
+	    if (fd == mq_set.from_worker_job_mqd) {
+	      ReportJob report_job;
+	      mq_receive(mq_set.from_worker_job_mqd, (char *)&report_job, sizeof(ReportJob), NULL);
+	      match_queue.handle_report(report_job);
+	    } else if (fd == mq_set.from_worker_pid_mqd) {
+	      ReportPid report_pid;
+	      mq_receive(mq_set.from_worker_pid_mqd, (char *)&report_pid, sizeof(ReportPid), NULL);
+	    }
 	    break;
 	  }
+	  case SIGNAL: {
+	    struct signalfd_siginfo s;
+	    int len = read(fd, &s, sizeof(struct signalfd_siginfo));
+	    if (len != sizeof(struct signalfd_siginfo)) {
+	      perror("read signal fd");
+	    }
+	    
+	    int pid;
+	    while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
+	      printf("child pid %d die\n", pid);
+	      match_queue.handle_child_crash(pid);
+	    }
 	  }
 	}
       }
     }
   }
+}

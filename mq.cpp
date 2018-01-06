@@ -8,10 +8,10 @@ using namespace std;
 // 建立兩個消息隊列
 // 1. 主程序用以向工人程序發送工作
 // 2. 工人程序向主程序回報成果
-MQPair create_MQ_pair() {
+MQSet create_MQ_pair() {
 
   printf("開始嘗試建立消息隊列\n");
-  struct MQPair ret;
+  struct MQSet ret;
 
   struct mq_attr attr;
 
@@ -37,14 +37,31 @@ MQPair create_MQ_pair() {
   }
 
   count = 0;
-  prefix = "/inf-bonbon-server-from-worker";
+  prefix = "/inf-bonbon-server-job-from-worker";
   attr.mq_msgsize = sizeof(ReportJob);
   while (true) {
     string name = prefix + to_string(count);
     mq_unlink(name.c_str());
     mqd_t mqd = mq_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600, &attr);
     if (mqd != -1) {
-      ret.from_worker_mqd = mqd;
+      ret.from_worker_job_mqd = mqd;
+      printf("建立消息隊列。名稱： %s mqd： %d\n", name.c_str(), mqd);
+      break;
+    } else {
+      perror("建立消息隊列");
+    }
+    count += 1;
+  }
+  
+  count = 0;
+  prefix = "/inf-bonbon-server-pid-from-worker";
+  attr.mq_msgsize = sizeof(ReportPid);
+  while (true) {
+    string name = prefix + to_string(count);
+    mq_unlink(name.c_str());
+    mqd_t mqd = mq_open(name.c_str(), O_CREAT | O_EXCL | O_RDWR, 0600, &attr);
+    if (mqd != -1) {
+      ret.from_worker_pid_mqd = mqd;
       printf("建立消息隊列。名稱： %s mqd： %d\n", name.c_str(), mqd);
       break;
     } else {

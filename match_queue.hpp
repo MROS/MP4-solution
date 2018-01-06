@@ -31,17 +31,19 @@ public:
   
   unsigned int working_job;
   
-  MQPair mq_pair;
+  MQSet mq_pair;
   
-  MatchQueue(MQPair mq_pair, std::map<int, Client*>* clients);
+  MatchQueue(MQSet mq_pair, std::map<int, Client*>* clients);
   
-  void handle_child_crash();
+  void handle_child_crash(pid_t child_pid);
   void handle_quit(int id);
   void handle_match(int id);
   void handle_report(ReportJob report);
+  void handle_report_pid(ReportPid report_pid);
   void add(int id);
   void arrange_job();
 private:
+  std::map<pid_t, ReportPid> job_record;
   std::set<int> quit_set;
   void detach_with_matcher(Node<TryingUser> *trying_node);
   void detach(int id);

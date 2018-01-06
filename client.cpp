@@ -120,7 +120,6 @@ string createMatchedAPI(Client *target) {
   j["introduction"] = target->raw_user.introduction;
   j["filter_function"] = target->raw_user.filter_function;
   cout << "matched API: " << j.dump() << endl;
-  // TODO: 待補其他資訊
   return j.dump();
 }
 
