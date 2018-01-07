@@ -94,9 +94,6 @@ int main(int argc, char *argv[]) {
 
   int port = atoi(argv[1]);
   
-  pid_t pid = getpid();
-  
-  printf("main process pid: %d\n", pid);
   
   // 初始化 socket
   int socket_fd = set_up_socket(port);
@@ -106,7 +103,10 @@ int main(int argc, char *argv[]) {
   }
   printf("啓動 socket 成功，監聽 %d\n", port);
   
-  // 初始話 signal_fd
+  pid_t pid = getpid();
+  printf("main process pid: %d\n", pid);
+  
+  // 初始化 signal_fd
   int signal_fd = set_up_signal_fd();
   
   // 開始 select
